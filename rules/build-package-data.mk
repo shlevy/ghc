@@ -97,7 +97,7 @@ $1_$2_CONFIGURE_OPTS += --configure-option=--with-curses-libraries="$$(CURSES_LI
 endif
 
 ifeq "$$(CrossCompiling)" "YES"
-$1_$2_CONFIGURE_OPTS += --configure-option=--host=$(TargetPlatformFull)
+$1_$2_CONFIGURE_OPTS += --configure-option=--host=arm-apple-darwin10
 endif
 
 ifeq "$3" "0"

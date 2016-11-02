@@ -1553,14 +1553,18 @@ freePreloadObjectFile (ObjectCode *oc)
     }
     indirects = NULL;
 
-#else
+#elsif RTS_LINKER_USE_MMAP
 
-    if (RTS_LINKER_USE_MMAP && oc->imageMapped) {
+    if (oc->imageMapped) {
         munmap(oc->image, oc->fileSize);
     }
     else {
         stgFree(oc->image);
     }
+
+#else
+
+    stgFree(oc->image);
 
 #endif
 
@@ -2718,49 +2722,49 @@ static int ocAllocateSymbolExtras( ObjectCode* oc, int count, int first )
 {
   size_t n;
 
-  if (RTS_LINKER_USE_MMAP && USE_CONTIGUOUS_MMAP) {
+#if RTS_LINKER_USE_MMAP && USE_CONTIGUOUS_MMAP
+  n = roundUpToPage(oc->fileSize);
+
+  /* Keep image and symbol_extras contiguous */
+  void *new = mmapForLinker(n + (sizeof(SymbolExtra) * count),
+                            MAP_ANONYMOUS, -1, 0);
+  if (new) {
+      memcpy(new, oc->image, oc->fileSize);
+      if (oc->imageMapped) {
+          munmap(oc->image, n);
+      }
+      oc->image = new;
+      oc->imageMapped = rtsTrue;
+      oc->fileSize = n + (sizeof(SymbolExtra) * count);
+      oc->symbol_extras = (SymbolExtra *) (oc->image + n);
+  }
+  else {
+      oc->symbol_extras = NULL;
+      return 0;
+  }
+#else
+  if( count > 0 ) {
+#if RTS_LINKER_USE_MMAP
       n = roundUpToPage(oc->fileSize);
 
-      /* Keep image and symbol_extras contiguous */
-      void *new = mmapForLinker(n + (sizeof(SymbolExtra) * count),
-                                MAP_ANONYMOUS, -1, 0);
-      if (new) {
-          memcpy(new, oc->image, oc->fileSize);
-          if (oc->imageMapped) {
-              munmap(oc->image, n);
-          }
-          oc->image = new;
-          oc->imageMapped = rtsTrue;
-          oc->fileSize = n + (sizeof(SymbolExtra) * count);
-          oc->symbol_extras = (SymbolExtra *) (oc->image + n);
-      }
-      else {
-          oc->symbol_extras = NULL;
-          return 0;
-      }
+      oc->symbol_extras = m32_alloc(sizeof(SymbolExtra) * count, 8);
+      if (oc->symbol_extras == NULL) return 0;
+#else
+      // round up to the nearest 4
+      int aligned = (oc->fileSize + 3) & ~3;
+      int misalignment = oc->misalignment;
+
+      oc->image -= misalignment;
+      oc->image = stgReallocBytes( oc->image,
+                                   misalignment +
+                                   aligned + sizeof (SymbolExtra) * count,
+                                   "ocAllocateSymbolExtras" );
+      oc->image += misalignment;
+
+      oc->symbol_extras = (SymbolExtra *) (oc->image + aligned);
+#endif
   }
-  else if( count > 0 ) {
-    if (RTS_LINKER_USE_MMAP) {
-        n = roundUpToPage(oc->fileSize);
-
-        oc->symbol_extras = m32_alloc(sizeof(SymbolExtra) * count, 8);
-        if (oc->symbol_extras == NULL) return 0;
-    }
-    else {
-        // round up to the nearest 4
-        int aligned = (oc->fileSize + 3) & ~3;
-        int misalignment = oc->misalignment;
-
-        oc->image -= misalignment;
-        oc->image = stgReallocBytes( oc->image,
-                                 misalignment +
-                                 aligned + sizeof (SymbolExtra) * count,
-                                 "ocAllocateSymbolExtras" );
-        oc->image += misalignment;
-
-        oc->symbol_extras = (SymbolExtra *) (oc->image + aligned);
-    }
-  }
+#endif
 
   if (oc->symbol_extras != NULL) {
       memset( oc->symbol_extras, 0, sizeof (SymbolExtra) * count );

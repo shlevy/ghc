@@ -101,7 +101,7 @@ $(libffi_STAMP_CONFIGURE): $(TOUCH_DEP)
 	          --libdir=$(TOP)/libffi/build/inst/lib \
 	          --enable-static=yes \
 	          --enable-shared=$(libffi_EnableShared) \
-	          --host=$(TargetPlatformFull)
+	          --host=arm-apple-darwin10
 
 	# wc on OS X has spaces in its output, which libffi's Makefile
 	# doesn't expect, so we tweak it to sed them out
