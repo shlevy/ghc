@@ -20,26 +20,6 @@
 #include "PosixSource.h"
 #include "Rts.h"
 
-/*
- * timer_create doesn't exist and setitimer doesn't fire on iOS, so we're using
- * a pthreads-based implementation. It may be to do with interference with the
- * signals of the debugger. Revisit. See #7723.
- */
-#if defined(ios_HOST_OS)
-#define USE_PTHREAD_FOR_ITIMER
-#endif
-
-/*
- * On Linux in the threaded RTS we can use timerfd_* (introduced in Linux
- * 2.6.25) and a thread instead of alarm signals. It avoids the risk of
- * interrupting syscalls (see #10840) and the risk of being accidentally
- * modified in user code using signals.
- */
-#if defined(linux_HOST_OS) && defined(THREADED_RTS) && HAVE_SYS_TIMERFD_H
-#define USE_PTHREAD_FOR_ITIMER
-#endif
-
-
 #if defined(solaris2_HOST_OS)
 /* USE_TIMER_CREATE is usually disabled for Solaris. In fact it is
    supported well on this OS, but requires additional privilege. When

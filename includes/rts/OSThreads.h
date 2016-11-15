@@ -15,7 +15,27 @@
 #ifndef RTS_OSTHREADS_H
 #define RTS_OSTHREADS_H
 
-#if defined(THREADED_RTS) /* to near the end */
+/*
+ * timer_create doesn't exist and setitimer doesn't fire on iOS, so we're using
+ * a pthreads-based implementation. It may be to do with interference with the
+ * signals of the debugger. Revisit. See #7723.
+ */
+#if defined(ios_HOST_OS)
+#define USE_PTHREAD_FOR_ITIMER
+#endif
+
+/*
+ * On Linux in the threaded RTS we can use timerfd_* (introduced in Linux
+ * 2.6.25) and a thread instead of alarm signals. It avoids the risk of
+ * interrupting syscalls (see #10840) and the risk of being accidentally
+ * modified in user code using signals.
+ */
+#if defined(linux_HOST_OS) && defined(THREADED_RTS) && HAVE_SYS_TIMERFD_H
+#define USE_PTHREAD_FOR_ITIMER
+#endif
+
+
+#if defined(THREADED_RTS) || defined(USE_PTHREAD_FOR_ITIMER) /* to near end */
 
 #if defined(HAVE_PTHREAD_H) && !defined(mingw32_HOST_OS)
 
@@ -205,13 +225,26 @@ void setThreadNode (uint32_t node);
 void releaseThreadNode (void);
 #endif // !CMINUSMINUS
 
-#else
+#endif /* defined(THREADED_RTS) || defined(USE_PTHREAD_FOR_ITIMER) */
+
+#ifndef THREADED_RTS
+
+#ifdef USE_PTHREAD_FOR_ITIMER
+// The pthread Itimer implementation pulls in the threading primitives
+// even when the RTS isn't threaded, but other code expects these
+// macros to be noops on non-threaded RTS
+
+#undef ACQUIRE_LOCK
+#undef RELEASE_LOCK
+#undef ASSERT_LOCK_HELD
+
+#endif
 
 #define ACQUIRE_LOCK(l)
 #define RELEASE_LOCK(l)
 #define ASSERT_LOCK_HELD(l)
 
-#endif /* defined(THREADED_RTS) */
+#endif
 
 #ifndef CMINUSMINUS
 //

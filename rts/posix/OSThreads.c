@@ -35,7 +35,7 @@
 #endif
 #endif
 
-#if defined(THREADED_RTS)
+#if defined(THREADED_RTS) || defined(USE_PTHREAD_FOR_ITIMER)
 #include "RtsUtils.h"
 #include "Task.h"
 
@@ -225,47 +225,6 @@ forkOS_createThreadWrapper ( void * entry )
     return NULL;
 }
 
-int
-forkOS_createThread ( HsStablePtr entry )
-{
-    pthread_t tid;
-    int result = pthread_create(&tid, NULL,
-                                forkOS_createThreadWrapper, (void*)entry);
-    if(!result)
-        pthread_detach(tid);
-    return result;
-}
-
-void freeThreadingResources (void) { /* nothing */ }
-
-uint32_t
-getNumberOfProcessors (void)
-{
-    static uint32_t nproc = 0;
-
-    if (nproc == 0) {
-#if defined(HAVE_SYSCONF) && defined(_SC_NPROCESSORS_ONLN)
-        nproc = sysconf(_SC_NPROCESSORS_ONLN);
-#elif defined(HAVE_SYSCONF) && defined(_SC_NPROCESSORS_CONF)
-        nproc = sysconf(_SC_NPROCESSORS_CONF);
-#elif defined(darwin_HOST_OS)
-        size_t size = sizeof(uint32_t);
-        if(sysctlbyname("hw.logicalcpu",&nproc,&size,NULL,0) != 0) {
-            if(sysctlbyname("hw.ncpu",&nproc,&size,NULL,0) != 0)
-                nproc = 1;
-        }
-#elif defined(freebsd_HOST_OS)
-        size_t size = sizeof(uint32_t);
-        if(sysctlbyname("hw.ncpu",&nproc,&size,NULL,0) != 0)
-            nproc = 1;
-#else
-        nproc = 1;
-#endif
-    }
-
-    return nproc;
-}
-
 #if defined(HAVE_SCHED_H) && defined(HAVE_SCHED_SETAFFINITY)
 // Schedules the thread to run on CPU n of m.  m may be less than the
 // number of physical CPUs, in which case, the thread will be allowed
@@ -351,6 +310,51 @@ void
 interruptOSThread (OSThreadId id)
 {
     pthread_kill(id, SIGPIPE);
+}
+
+#endif /* defined(THREADED_RTS) || defined(USE_PTHREAD_FOR_ITIMER) */
+
+#if defined(THREADED_RTS)
+
+int
+forkOS_createThread ( HsStablePtr entry )
+{
+    pthread_t tid;
+    int result = pthread_create(&tid, NULL,
+                                forkOS_createThreadWrapper, (void*)entry);
+    if(!result)
+        pthread_detach(tid);
+    return result;
+}
+
+void freeThreadingResources (void) { /* nothing */ }
+
+uint32_t
+getNumberOfProcessors (void)
+{
+    static uint32_t nproc = 0;
+
+    if (nproc == 0) {
+#if defined(HAVE_SYSCONF) && defined(_SC_NPROCESSORS_ONLN)
+        nproc = sysconf(_SC_NPROCESSORS_ONLN);
+#elif defined(HAVE_SYSCONF) && defined(_SC_NPROCESSORS_CONF)
+        nproc = sysconf(_SC_NPROCESSORS_CONF);
+#elif defined(darwin_HOST_OS)
+        size_t size = sizeof(uint32_t);
+        if(sysctlbyname("hw.logicalcpu",&nproc,&size,NULL,0) != 0) {
+            if(sysctlbyname("hw.ncpu",&nproc,&size,NULL,0) != 0)
+                nproc = 1;
+        }
+#elif defined(freebsd_HOST_OS)
+        size_t size = sizeof(uint32_t);
+        if(sysctlbyname("hw.ncpu",&nproc,&size,NULL,0) != 0)
+            nproc = 1;
+#else
+        nproc = 1;
+#endif
+    }
+
+    return nproc;
 }
 
 #else /* !defined(THREADED_RTS) */
