@@ -437,7 +437,7 @@ then
 else
   CrossCompilePrefix=""
 fi
-TargetPlatformFull="${TargetPlatform}"
+TargetPlatformFull="${target}"
 AC_SUBST(CrossCompiling)
 AC_SUBST(CrossCompilePrefix)
 AC_SUBST(TargetPlatformFull)
