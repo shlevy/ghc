@@ -237,7 +237,7 @@ rnIfaceGlobal n = do
                         then mkModule (thisPackage dflags) (moduleName m')
                         else m'
             iface <- liftIO . initIfaceCheck (text "rnIfaceGlobal") hsc_env
-                            $ loadSysInterface (text "rnIfaceGlobal") m''
+                            $ loadSysInterface (text "rnIfaceGlobal") m'' RunTime
             let nsubst = mkNameShape (moduleName m) (mi_exports iface)
             return (substNameShape nsubst n)
 

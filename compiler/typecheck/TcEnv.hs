@@ -115,12 +115,12 @@ import Data.List
 *                                                                      *
 ********************************************************************* -}
 
-lookupGlobal :: HscEnv -> Name -> IO TyThing
+lookupGlobal :: HscEnv -> Name -> ProgramLifecyclePhase -> IO TyThing
 -- An IO version, used outside the typechecker
 -- It's more complicated than it looks, because it may
 -- need to suck in an interface file
 lookupGlobal hsc_env name
-  = initTcForLookup hsc_env (tcLookupGlobal name)
+  = initTcForLookup hsc_env . tcLookupGlobal name
     -- This initTcForLookup stuff is massive overkill
     -- but that's how it is right now, and at least
     -- this function localises it
@@ -138,17 +138,17 @@ span of the Name.
 -}
 
 
-tcLookupLocatedGlobal :: Located Name -> TcM TyThing
+tcLookupLocatedGlobal :: Located Name -> ProgramLifecyclePhase -> TcM TyThing
 -- c.f. IfaceEnvEnv.tcIfaceGlobal
-tcLookupLocatedGlobal name
-  = addLocM tcLookupGlobal name
+tcLookupLocatedGlobal name phase
+  = addLocM (flip tcLookupGlobal phase) name
 
-tcLookupGlobal :: Name -> TcM TyThing
+tcLookupGlobal :: Name -> ProgramLifecyclePhase -> TcM TyThing
 -- The Name is almost always an ExternalName, but not always
 -- In GHCi, we may make command-line bindings (ghci> let x = True)
 -- that bind a GlobalId, but with an InternalName
-tcLookupGlobal name
-  = do  {    -- Try local envt
+tcLookupGlobal name phase
+  = do  {    -- Try local envte
           env <- getGblEnv
         ; case lookupNameEnv (tcg_type_env env) name of {
                 Just thing -> return thing ;
@@ -162,62 +162,62 @@ tcLookupGlobal name
           else
 
            -- Try home package table and external package table
-    do  { mb_thing <- tcLookupImported_maybe name
+    do  { mb_thing <- tcLookupImported_maybe name phase
         ; case mb_thing of
             Succeeded thing -> return thing
             Failed msg      -> failWithTc msg
         }}}
 
-tcLookupDataCon :: Name -> TcM DataCon
-tcLookupDataCon name = do
-    thing <- tcLookupGlobal name
+tcLookupDataCon :: Name -> ProgramLifecyclePhase -> TcM DataCon
+tcLookupDataCon name phase = do
+    thing <- tcLookupGlobal name phase
     case thing of
         AConLike (RealDataCon con) -> return con
         _                          -> wrongThingErr "data constructor" (AGlobal thing) name
 
-tcLookupPatSyn :: Name -> TcM PatSyn
-tcLookupPatSyn name = do
-    thing <- tcLookupGlobal name
+tcLookupPatSyn :: Name -> ProgramLifecyclePhase -> TcM PatSyn
+tcLookupPatSyn name phase = do
+    thing <- tcLookupGlobal name phase
     case thing of
         AConLike (PatSynCon ps) -> return ps
         _                       -> wrongThingErr "pattern synonym" (AGlobal thing) name
 
-tcLookupConLike :: Name -> TcM ConLike
-tcLookupConLike name = do
-    thing <- tcLookupGlobal name
+tcLookupConLike :: Name -> ProgramLifecyclePhase -> TcM ConLike
+tcLookupConLike name phase = do
+    thing <- tcLookupGlobal name phase
     case thing of
         AConLike cl -> return cl
         _           -> wrongThingErr "constructor-like thing" (AGlobal thing) name
 
-tcLookupClass :: Name -> TcM Class
-tcLookupClass name = do
-    thing <- tcLookupGlobal name
+tcLookupClass :: Name -> ProgramLifecyclePhase -> TcM Class
+tcLookupClass name phase = do
+    thing <- tcLookupGlobal name phase
     case thing of
         ATyCon tc | Just cls <- tyConClass_maybe tc -> return cls
         _                                           -> wrongThingErr "class" (AGlobal thing) name
 
-tcLookupTyCon :: Name -> TcM TyCon
-tcLookupTyCon name = do
-    thing <- tcLookupGlobal name
+tcLookupTyCon :: Name -> ProgramLifecyclePhase -> TcM TyCon
+tcLookupTyCon name phase = do
+    thing <- tcLookupGlobal name phase
     case thing of
         ATyCon tc -> return tc
         _         -> wrongThingErr "type constructor" (AGlobal thing) name
 
-tcLookupAxiom :: Name -> TcM (CoAxiom Branched)
-tcLookupAxiom name = do
-    thing <- tcLookupGlobal name
+tcLookupAxiom :: Name -> ProgramLifecyclePhase -> TcM (CoAxiom Branched)
+tcLookupAxiom name phase = do
+    thing <- tcLookupGlobal name phase
     case thing of
         ACoAxiom ax -> return ax
         _           -> wrongThingErr "axiom" (AGlobal thing) name
 
-tcLookupLocatedGlobalId :: Located Name -> TcM Id
-tcLookupLocatedGlobalId = addLocM tcLookupId
+tcLookupLocatedGlobalId :: Located Name -> ProgramLifecyclePhase-> TcM Id
+tcLookupLocatedGlobalId name phase = addLocM (flip tcLookupId phase) name
 
-tcLookupLocatedClass :: Located Name -> TcM Class
-tcLookupLocatedClass = addLocM tcLookupClass
+tcLookupLocatedClass :: Located Name -> ProgramLifecyclePhase -> TcM Class
+tcLookupLocatedClass name phase = addLocM (flip tcLookupClass phase) name
 
-tcLookupLocatedTyCon :: Located Name -> TcM TyCon
-tcLookupLocatedTyCon = addLocM tcLookupTyCon
+tcLookupLocatedTyCon :: Located Name -> ProgramLifecyclePhase -> TcM TyCon
+tcLookupLocatedTyCon name phase = addLocM (flip tcLookupTyCon phase) name
 
 -- Find the instance that exactly matches a type class application.  The class arguments must be precisely
 -- the same as in the instance declaration (modulo renaming & casts).
@@ -319,35 +319,35 @@ tcExtendRecEnv gbl_stuff thing_inside
 ************************************************************************
 -}
 
-tcLookupLocated :: Located Name -> TcM TcTyThing
-tcLookupLocated = addLocM tcLookup
+tcLookupLocated :: Located Name -> ProgramLifecyclePhase -> TcM TcTyThing
+tcLookupLocated name phase = addLocM (flip tcLookup phase) name
 
 tcLookupLcl_maybe :: Name -> TcM (Maybe TcTyThing)
 tcLookupLcl_maybe name
   = do { local_env <- getLclTypeEnv
        ; return (lookupNameEnv local_env name) }
 
-tcLookup :: Name -> TcM TcTyThing
-tcLookup name = do
+tcLookup :: Name -> ProgramLifecyclePhase -> TcM TcTyThing
+tcLookup name phase = do
     local_env <- getLclTypeEnv
     case lookupNameEnv local_env name of
         Just thing -> return thing
-        Nothing    -> AGlobal <$> tcLookupGlobal name
+        Nothing    -> AGlobal <$> tcLookupGlobal name phase
 
-tcLookupTyVar :: Name -> TcM TcTyVar
-tcLookupTyVar name
-  = do { thing <- tcLookup name
+tcLookupTyVar :: Name -> ProgramLifecyclePhase -> TcM TcTyVar
+tcLookupTyVar name phase
+  = do { thing <- tcLookup name phase
        ; case thing of
            ATyVar _ tv -> return tv
            _           -> pprPanic "tcLookupTyVar" (ppr name) }
 
-tcLookupId :: Name -> TcM Id
+tcLookupId :: Name -> ProgramLifecyclePhase -> TcM Id
 -- Used when we aren't interested in the binding level, nor refinement.
 -- The "no refinement" part means that we return the un-refined Id regardless
 --
 -- The Id is never a DataCon. (Why does that matter? see TcExpr.tcId)
-tcLookupId name = do
-    thing <- tcLookup name
+tcLookupId name phase = do
+    thing <- tcLookup name phase
     case thing of
         ATcId { tct_id = id} -> return id
         AGlobal (AnId id)    -> return id
@@ -716,12 +716,14 @@ topIdLvl :: Id -> ThLevel
 topIdLvl id | isLocalId id = outerLevel
             | otherwise    = impLevel
 
-tcMetaTy :: Name -> TcM Type
+tcMetaTy :: Name -> ProgramLifecyclePhase -> TcM Type
 -- Given the name of a Template Haskell data type,
 -- return the type
 -- E.g. given the name "Expr" return the type "Expr"
-tcMetaTy tc_name = do
-    t <- tcLookupTyCon tc_name
+tcMetaTy tc_name phase = do
+    -- The documentation and name suggests this function is exclusively
+    -- for RunTime, but it's used in tcGetDefaultTys...
+    t <- tcLookupTyCon tc_name phase
     return (mkTyConApp t [])
 
 isBrackStage :: ThStage -> Bool
@@ -736,10 +738,11 @@ isBrackStage _other     = False
 ************************************************************************
 -}
 
-tcGetDefaultTys :: TcM ([Type], -- Default types
+tcGetDefaultTys :: ProgramLifecyclePhase
+                -> TcM ([Type], -- Default types
                         (Bool,  -- True <=> Use overloaded strings
                          Bool)) -- True <=> Use extended defaulting rules
-tcGetDefaultTys
+tcGetDefaultTys phase
   = do  { dflags <- getDynFlags
         ; let ovl_strings = xopt LangExt.OverloadedStrings dflags
               extended_defaults = xopt LangExt.ExtendedDefaultRules dflags
@@ -754,9 +757,9 @@ tcGetDefaultTys
 
         -- No use-supplied default
         -- Use [Integer, Double], plus modifications
-        { integer_ty <- tcMetaTy integerTyConName
-        ; list_ty <- tcMetaTy listTyConName
-        ; checkWiredInTyCon doubleTyCon
+        { integer_ty <- tcMetaTy integerTyConName phase
+        ; list_ty <- tcMetaTy listTyConName phase
+        ; checkWiredInTyCon doubleTyCon phase
         ; let deflt_tys = opt_deflt extended_defaults [unitTy, list_ty]
                           -- Note [Extended defaults]
                           ++ [integer_ty, doubleTy]

@@ -9,7 +9,7 @@
 -- | Types for the per-module compiler
 module HscTypes (
         -- * compilation state
-        HscEnv(..), hscEPS,
+        HscEnv(..), ProgramLifecyclePhase(..), hsc_HPT, hscEPS,
         FinderCache, FindResult(..), InstalledFindResult(..),
         Target(..), TargetId(..), pprTarget, pprTargetId,
         ModuleGraph, emptyMG,
@@ -365,26 +365,29 @@ data HscEnv
         hsc_IC :: InteractiveContext,
                 -- ^ The context for evaluating interactive statements
 
-        hsc_HPT    :: HomePackageTable,
-                -- ^ The home package table describes already-compiled
-                -- home-package modules, /excluding/ the module we
-                -- are compiling right now.
-                -- (In one-shot mode the current module is the only
-                -- home-package module, so hsc_HPT is empty.  All other
-                -- modules count as \"external-package\" modules.
-                -- However, even in GHCi mode, hi-boot interfaces are
-                -- demand-loaded into the external-package table.)
-                --
-                -- 'hsc_HPT' is not mutable because we only demand-load
-                -- external packages; the home package is eagerly
-                -- loaded, module by module, by the compilation manager.
-                --
-                -- The HPT may contain modules compiled earlier by @--make@
-                -- but not actually below the current module in the dependency
-                -- graph.
-                --
-                -- (This changes a previous invariant: changed Jan 05.)
-
+        hsc_compiletime_HPT    :: HomePackageTable,
+                            -- ^ The compiletime home package table describes
+                            -- already-compiled home-package modules, /excluding/
+                            -- the module we are compiling right now
+                            -- (In one-shot mode the current module is the only
+                            -- home-package module, so hsc_HPT is empty.  All other
+                            -- modules count as \"external-package\" modules.
+                            -- However, even in GHCi mode, hi-boot interfaces are
+                            -- demand-loaded into the external-package table.)
+                            --
+                            -- 'hsc_compiletime_HPT' is not mutable because we only
+                            -- demand-loadexternal packages; the home package is
+                            -- eagerly loaded, module by module, by the compilation
+                            -- manager.
+                            --
+                            -- The HPT may contain modules compiled earlier by @--make@
+                            -- but not actually below the current module in the dependency
+                            -- graph.
+                            --
+                            -- (This changes a previous invariant: changed Jan 05.)
+        hsc_runtime_HPT    :: HomePackageTable,
+                        -- ^ Same as 'hsc_compiletime_HPT', but for modules
+                        -- to be used at runtime.
         hsc_EPS :: {-# UNPACK #-} !(IORef ExternalPackageState),
                 -- ^ Information about the currently loaded external packages.
                 -- This is mutable because packages will be demand-loaded during
@@ -461,6 +464,15 @@ data IServ = IServ
   , iservPendingFrees :: [HValueRef]
   }
 #endif
+
+-- | The phases of the program lifecycle modules can be loaded for
+data ProgramLifecyclePhase = CompileTime | RunTime
+
+-- | Retrieve the HomePackageTable for the relevant program lifecycle
+-- phase.
+hsc_HPT :: ProgramLifecyclePhase -> HscEnv -> HomePackageTable
+hsc_HPT CompileTime = hsc_compiletime_HPT
+hsc_HPT RunTime = hsc_runtime_HPT
 
 -- | Retrieve the ExternalPackageState cache.
 hscEPS :: HscEnv -> IO ExternalPackageState
@@ -628,9 +640,9 @@ lookupIfaceByModule _dflags hpt pit mod
 -- the Home Package Table filtered by the provided predicate function.
 -- Used in @tcRnImports@, to select the instances that are in the
 -- transitive closure of imports from the currently compiled module.
-hptInstances :: HscEnv -> (ModuleName -> Bool) -> ([ClsInst], [FamInst])
-hptInstances hsc_env want_this_module
-  = let (insts, famInsts) = unzip $ flip hptAllThings hsc_env $ \mod_info -> do
+hptInstances :: ProgramLifecyclePhase -> HscEnv -> (ModuleName -> Bool) -> ([ClsInst], [FamInst])
+hptInstances phase hsc_env want_this_module
+  = let (insts, famInsts) = unzip $ (\f -> hptAllThings f phase hsc_env) $ \mod_info -> do
                 guard (want_this_module (moduleName (mi_module (hm_iface mod_info))))
                 let details = hm_details mod_info
                 return (md_insts details, md_fam_insts details)
@@ -640,30 +652,30 @@ hptInstances hsc_env want_this_module
 -- contrast to instances and rules, we don't care whether the modules are
 -- "below" us in the dependency sense. The VectInfo of those modules not "below"
 -- us does not affect the compilation of the current module.
-hptVectInfo :: HscEnv -> VectInfo
-hptVectInfo = concatVectInfo . hptAllThings ((: []) . md_vect_info . hm_details)
+hptVectInfo :: ProgramLifecyclePhase -> HscEnv -> VectInfo
+hptVectInfo phase = concatVectInfo . hptAllThings ((: []) . md_vect_info . hm_details) phase
 
 -- | Get rules from modules "below" this one (in the dependency sense)
-hptRules :: HscEnv -> [(ModuleName, IsBootInterface)] -> [CoreRule]
+hptRules :: ProgramLifecyclePhase -> HscEnv -> [(ModuleName, IsBootInterface)] -> [CoreRule]
 hptRules = hptSomeThingsBelowUs (md_rules . hm_details) False
 
 
 -- | Get annotations from modules "below" this one (in the dependency sense)
-hptAnns :: HscEnv -> Maybe [(ModuleName, IsBootInterface)] -> [Annotation]
-hptAnns hsc_env (Just deps) = hptSomeThingsBelowUs (md_anns . hm_details) False hsc_env deps
-hptAnns hsc_env Nothing = hptAllThings (md_anns . hm_details) hsc_env
+hptAnns :: ProgramLifecyclePhase -> HscEnv -> Maybe [(ModuleName, IsBootInterface)] -> [Annotation]
+hptAnns phase hsc_env (Just deps) = hptSomeThingsBelowUs (md_anns . hm_details) False phase hsc_env deps
+hptAnns phase hsc_env Nothing = hptAllThings (md_anns . hm_details) phase hsc_env
 
-hptAllThings :: (HomeModInfo -> [a]) -> HscEnv -> [a]
-hptAllThings extract hsc_env = concatMap extract (eltsHpt (hsc_HPT hsc_env))
+hptAllThings :: (HomeModInfo -> [a]) -> ProgramLifecyclePhase -> HscEnv -> [a]
+hptAllThings extract phase hsc_env = concatMap extract (eltsHpt (hsc_HPT phase hsc_env))
 
 -- | Get things from modules "below" this one (in the dependency sense)
 -- C.f Inst.hptInstances
-hptSomeThingsBelowUs :: (HomeModInfo -> [a]) -> Bool -> HscEnv -> [(ModuleName, IsBootInterface)] -> [a]
-hptSomeThingsBelowUs extract include_hi_boot hsc_env deps
+hptSomeThingsBelowUs :: (HomeModInfo -> [a]) -> Bool -> ProgramLifecyclePhase -> HscEnv -> [(ModuleName, IsBootInterface)] -> [a]
+hptSomeThingsBelowUs extract include_hi_boot phase hsc_env deps
   | isOneShot (ghcMode (hsc_dflags hsc_env)) = []
 
   | otherwise
-  = let hpt = hsc_HPT hsc_env
+  = let hpt = hsc_HPT phase hsc_env
     in
     [ thing
     |   -- Find each non-hi-boot module below me
@@ -741,15 +753,15 @@ metaRequestAW h = fmap unMetaResAW . h (MetaAW MetaResAW)
 
 -- | Deal with gathering annotations in from all possible places
 --   and combining them into a single 'AnnEnv'
-prepareAnnotations :: HscEnv -> Maybe ModGuts -> IO AnnEnv
-prepareAnnotations hsc_env mb_guts = do
+prepareAnnotations :: ProgramLifecyclePhase -> HscEnv -> Maybe ModGuts -> IO AnnEnv
+prepareAnnotations phase hsc_env mb_guts = do
     eps <- hscEPS hsc_env
     let -- Extract annotations from the module being compiled if supplied one
         mb_this_module_anns = fmap (mkAnnEnv . mg_anns) mb_guts
         -- Extract dependencies of the module if we are supplied one,
         -- otherwise load annotations from all home package table
         -- entries regardless of dependency ordering.
-        home_pkg_anns  = (mkAnnEnv . hptAnns hsc_env) $ fmap (dep_mods . mg_deps) mb_guts
+        home_pkg_anns  = (mkAnnEnv . hptAnns phase hsc_env) $ fmap (dep_mods . mg_deps) mb_guts
         other_pkg_anns = eps_ann_env eps
         ann_env        = foldl1' plusAnnEnv $ catMaybes [mb_this_module_anns,
                                                          Just home_pkg_anns,
@@ -2049,13 +2061,13 @@ lookupType dflags hpt pte name
 
 -- | As 'lookupType', but with a marginally easier-to-use interface
 -- if you have a 'HscEnv'
-lookupTypeHscEnv :: HscEnv -> Name -> IO (Maybe TyThing)
-lookupTypeHscEnv hsc_env name = do
+lookupTypeHscEnv :: ProgramLifecyclePhase -> HscEnv -> Name -> IO (Maybe TyThing)
+lookupTypeHscEnv phase hsc_env name = do
     eps <- readIORef (hsc_EPS hsc_env)
     return $! lookupType dflags hpt (eps_PTE eps) name
   where
     dflags = hsc_dflags hsc_env
-    hpt = hsc_HPT hsc_env
+    hpt = hsc_HPT phase hsc_env
 
 -- | Get the 'TyCon' from a 'TyThing' if it is a type constructor thing. Panics otherwise
 tyThingTyCon :: TyThing -> TyCon
@@ -2091,16 +2103,16 @@ tyThingId other                       = pprPanic "tyThingId" (ppr other)
 -- a number of related convenience functions for accessing particular
 -- kinds of 'TyThing'
 class Monad m => MonadThings m where
-        lookupThing :: Name -> m TyThing
+        lookupThing :: Name -> ProgramLifecyclePhase -> m TyThing
 
-        lookupId :: Name -> m Id
-        lookupId = liftM tyThingId . lookupThing
+        lookupId :: Name -> ProgramLifecyclePhase -> m Id
+        lookupId name = liftM tyThingId . lookupThing name
 
-        lookupDataCon :: Name -> m DataCon
-        lookupDataCon = liftM tyThingDataCon . lookupThing
+        lookupDataCon :: Name -> ProgramLifecyclePhase -> m DataCon
+        lookupDataCon name = liftM tyThingDataCon . lookupThing name
 
-        lookupTyCon :: Name -> m TyCon
-        lookupTyCon = liftM tyThingTyCon . lookupThing
+        lookupTyCon :: Name -> ProgramLifecyclePhase -> m TyCon
+        lookupTyCon name = liftM tyThingTyCon . lookupThing name
 
 {-
 ************************************************************************

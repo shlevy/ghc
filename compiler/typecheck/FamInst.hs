@@ -181,10 +181,10 @@ listToSet l = Set.fromList l
 --
 -- See Note [Checking family instance consistency] for more
 -- details.
-checkFamInstConsistency :: [Module] -> [Module] -> TcM ()
-checkFamInstConsistency famInstMods directlyImpMods
+checkFamInstConsistency :: [Module] -> [Module] -> ProgramLifecyclePhase -> TcM ()
+checkFamInstConsistency famInstMods directlyImpMods phase
   = do { dflags     <- getDynFlags
-       ; (eps, hpt) <- getEpsAndHpt
+       ; (eps, hpt) <- getEpsAndHpt phase
        ; let { -- Fetch the iface of a given module.  Must succeed as
                -- all directly imported modules must already have been loaded.
                modIface mod =
@@ -217,8 +217,8 @@ checkFamInstConsistency famInstMods directlyImpMods
     allPairs (m:ms) = map (modulePair m) ms ++ allPairs ms
 
     check hpt_fam_insts (ModulePair m1 m2)
-      = do { env1 <- getFamInsts hpt_fam_insts m1
-           ; env2 <- getFamInsts hpt_fam_insts m2
+      = do { env1 <- getFamInsts hpt_fam_insts m1 phase
+           ; env2 <- getFamInsts hpt_fam_insts m2 phase
            ; mapM_ (checkForConflicts (emptyFamInstEnv, env2))
                    (famInstEnvElts env1)
            ; mapM_ (checkForInjectivityConflicts (emptyFamInstEnv,env2))
@@ -226,10 +226,10 @@ checkFamInstConsistency famInstMods directlyImpMods
  }
 
 
-getFamInsts :: ModuleEnv FamInstEnv -> Module -> TcM FamInstEnv
-getFamInsts hpt_fam_insts mod
+getFamInsts :: ModuleEnv FamInstEnv -> Module -> ProgramLifecyclePhase -> TcM FamInstEnv
+getFamInsts hpt_fam_insts mod phase
   | Just env <- lookupModuleEnv hpt_fam_insts mod = return env
-  | otherwise = do { _ <- initIfaceTcRn (loadSysInterface doc mod)
+  | otherwise = do { _ <- initIfaceTcRn (loadSysInterface doc mod phase)
                    ; eps <- getEps
                    ; return (expectJust "checkFamInstConsistency" $
                              lookupModuleEnv (eps_mod_fam_inst_env eps) mod) }

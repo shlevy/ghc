@@ -1,7 +1,7 @@
 module LoadIface where
 import Module (Module)
 import TcRnMonad (IfM)
-import HscTypes (ModIface)
+import HscTypes (ModIface, ProgramLifecyclePhase)
 import Outputable (SDoc)
 
-loadSysInterface :: SDoc -> Module -> IfM lcl ModIface
+loadSysInterface :: SDoc -> Module -> ProgramLifecyclePhase -> IfM lcl ModIface

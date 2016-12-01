@@ -104,36 +104,36 @@ where the code that e1 expands to might import some defns that
 also turn out to be needed by the code that e2 expands to.
 -}
 
-tcLookupImported_maybe :: Name -> TcM (MaybeErr MsgDoc TyThing)
+tcLookupImported_maybe :: Name -> ProgramLifecyclePhase -> TcM (MaybeErr MsgDoc TyThing)
 -- Returns (Failed err) if we can't find the interface file for the thing
-tcLookupImported_maybe name
+tcLookupImported_maybe name phase
   = do  { hsc_env <- getTopEnv
-        ; mb_thing <- liftIO (lookupTypeHscEnv hsc_env name)
+        ; mb_thing <- liftIO (lookupTypeHscEnv phase hsc_env name)
         ; case mb_thing of
             Just thing -> return (Succeeded thing)
-            Nothing    -> tcImportDecl_maybe name }
+            Nothing    -> tcImportDecl_maybe name phase }
 
-tcImportDecl_maybe :: Name -> TcM (MaybeErr MsgDoc TyThing)
+tcImportDecl_maybe :: Name -> ProgramLifecyclePhase -> TcM (MaybeErr MsgDoc TyThing)
 -- Entry point for *source-code* uses of importDecl
-tcImportDecl_maybe name
+tcImportDecl_maybe name phase
   | Just thing <- wiredInNameTyThing_maybe name
   = do  { when (needWiredInHomeIface thing)
-               (initIfaceTcRn (loadWiredInHomeIface name))
+               (initIfaceTcRn (loadWiredInHomeIface name phase))
                 -- See Note [Loading instances for wired-in things]
         ; return (Succeeded thing) }
   | otherwise
-  = initIfaceTcRn (importDecl name)
+  = initIfaceTcRn (importDecl name phase)
 
-importDecl :: Name -> IfM lcl (MaybeErr MsgDoc TyThing)
+importDecl :: Name -> ProgramLifecyclePhase -> IfM lcl (MaybeErr MsgDoc TyThing)
 -- Get the TyThing for this Name from an interface file
 -- It's not a wired-in thing -- the caller caught that
-importDecl name
+importDecl name phase
   = ASSERT( not (isWiredInName name) )
     do  { traceIf nd_doc
 
         -- Load the interface, which should populate the PTE
         ; mb_iface <- ASSERT2( isExternalName name, ppr name )
-                      loadInterface nd_doc (nameModule name) ImportBySystem
+                      loadInterface nd_doc (nameModule name) ImportBySystem phase
         ; case mb_iface of {
                 Failed err_msg  -> return (Failed err_msg) ;
                 Succeeded _ -> do
@@ -193,12 +193,12 @@ All of this is done by the type checker. The renamer plays no role.
 (It used to, but no longer.)
 -}
 
-checkWiredInTyCon :: TyCon -> TcM ()
+checkWiredInTyCon :: TyCon -> ProgramLifecyclePhase -> TcM ()
 -- Ensure that the home module of the TyCon (and hence its instances)
 -- are loaded. See Note [Loading instances for wired-in things]
 -- It might not be a wired-in tycon (see the calls in TcUnify),
 -- in which case this is a no-op.
-checkWiredInTyCon tc
+checkWiredInTyCon tc phase
   | not (isWiredInName tc_name)
   = return ()
   | otherwise
@@ -206,7 +206,7 @@ checkWiredInTyCon tc
         ; traceIf (text "checkWiredInTyCon" <+> ppr tc_name $$ ppr mod)
         ; ASSERT( isExternalName tc_name )
           when (mod /= nameModule tc_name)
-               (initIfaceTcRn (loadWiredInHomeIface tc_name))
+               (initIfaceTcRn (loadWiredInHomeIface tc_name phase))
                 -- Don't look for (non-existent) Float.hi when
                 -- compiling Float.hs, which mentions Float of course
                 -- A bit yukky to call initIfaceTcRn here
@@ -214,12 +214,12 @@ checkWiredInTyCon tc
   where
     tc_name = tyConName tc
 
-ifCheckWiredInThing :: TyThing -> IfL ()
+ifCheckWiredInThing :: TyThing -> ProgramLifecyclePhase -> IfL ()
 -- Even though we are in an interface file, we want to make
 -- sure the instances of a wired-in thing are loaded (imagine f :: Double -> Double)
 -- Ditto want to ensure that RULES are loaded too
 -- See Note [Loading instances for wired-in things]
-ifCheckWiredInThing thing
+ifCheckWiredInThing thing phase
   = do  { mod <- getIfModule
                 -- Check whether we are typechecking the interface for this
                 -- very module.  E.g when compiling the base library in --make mode
@@ -229,7 +229,7 @@ ifCheckWiredInThing thing
         ; let name = getName thing
         ; ASSERT2( isExternalName name, ppr name )
           when (needWiredInHomeIface thing && mod /= nameModule name)
-               (loadWiredInHomeIface name) }
+               (loadWiredInHomeIface name phase) }
 
 needWiredInHomeIface :: TyThing -> Bool
 -- Only for TyCons; see Note [Loading instances for wired-in things]
@@ -253,10 +253,11 @@ loadSrcInterface :: SDoc
                  -> ModuleName
                  -> IsBootInterface     -- {-# SOURCE #-} ?
                  -> Maybe FastString    -- "package", if any
+                 -> ProgramLifecyclePhase
                  -> RnM ModIface
 
-loadSrcInterface doc mod want_boot maybe_pkg
-  = do { res <- loadSrcInterface_maybe doc mod want_boot maybe_pkg
+loadSrcInterface doc mod want_boot maybe_pkg phase
+  = do { res <- loadSrcInterface_maybe doc mod want_boot maybe_pkg phase
        ; case res of
            Failed err      -> failWithTc err
            Succeeded iface -> return iface }
@@ -266,9 +267,10 @@ loadSrcInterface_maybe :: SDoc
                        -> ModuleName
                        -> IsBootInterface     -- {-# SOURCE #-} ?
                        -> Maybe FastString    -- "package", if any
+                       -> ProgramLifecyclePhase
                        -> RnM (MaybeErr MsgDoc ModIface)
 
-loadSrcInterface_maybe doc mod want_boot maybe_pkg
+loadSrcInterface_maybe doc mod want_boot maybe_pkg phase
   -- We must first find which Module this import refers to.  This involves
   -- calling the Finder, which as a side effect will search the filesystem
   -- and create a ModLocation.  If successful, loadIface will read the
@@ -277,7 +279,7 @@ loadSrcInterface_maybe doc mod want_boot maybe_pkg
   = do { hsc_env <- getTopEnv
        ; res <- liftIO $ findImportedModule hsc_env mod maybe_pkg
        ; case res of
-           Found _ mod -> initIfaceTcRn $ loadInterface doc mod (ImportByUser want_boot)
+           Found _ mod -> initIfaceTcRn $ loadInterface doc mod (ImportByUser want_boot) phase
            -- TODO: Make sure this error message is good
            err         -> return (Failed (cannotFindModule (hsc_dflags hsc_env) mod err)) }
 
@@ -285,37 +287,37 @@ loadSrcInterface_maybe doc mod want_boot maybe_pkg
 -- rare operation, but in particular it is used to load orphan modules
 -- in order to pull their instances into the global package table and to
 -- handle some operations in GHCi).
-loadModuleInterface :: SDoc -> Module -> TcM ModIface
-loadModuleInterface doc mod = initIfaceTcRn (loadSysInterface doc mod)
+loadModuleInterface :: SDoc -> Module -> ProgramLifecyclePhase -> TcM ModIface
+loadModuleInterface doc mod = initIfaceTcRn . loadSysInterface doc mod
 
 -- | Load interfaces for a collection of modules.
-loadModuleInterfaces :: SDoc -> [Module] -> TcM ()
-loadModuleInterfaces doc mods
+loadModuleInterfaces :: SDoc -> [Module] -> ProgramLifecyclePhase -> TcM ()
+loadModuleInterfaces doc mods phase
   | null mods = return ()
   | otherwise = initIfaceTcRn (mapM_ load mods)
   where
-    load mod = loadSysInterface (doc <+> parens (ppr mod)) mod
+    load mod = loadSysInterface (doc <+> parens (ppr mod)) mod phase
 
 -- | Loads the interface for a given Name.
 -- Should only be called for an imported name;
 -- otherwise loadSysInterface may not find the interface
-loadInterfaceForName :: SDoc -> Name -> TcRn ModIface
-loadInterfaceForName doc name
+loadInterfaceForName :: SDoc -> Name -> ProgramLifecyclePhase-> TcRn ModIface
+loadInterfaceForName doc name phase
   = do { when debugIsOn $  -- Check pre-condition
          do { this_mod <- getModule
             ; MASSERT2( not (nameIsLocalOrFrom this_mod name), ppr name <+> parens doc ) }
       ; ASSERT2( isExternalName name, ppr name )
-        initIfaceTcRn $ loadSysInterface doc (nameModule name) }
+        initIfaceTcRn $ loadSysInterface doc (nameModule name) phase }
 
 -- | Loads the interface for a given Module.
-loadInterfaceForModule :: SDoc -> Module -> TcRn ModIface
-loadInterfaceForModule doc m
+loadInterfaceForModule :: SDoc -> Module -> ProgramLifecyclePhase -> TcRn ModIface
+loadInterfaceForModule doc m phase
   = do
     -- Should not be called with this module
     when debugIsOn $ do
       this_mod <- getModule
       MASSERT2( this_mod /= m, ppr m <+> parens doc )
-    initIfaceTcRn $ loadSysInterface doc m
+    initIfaceTcRn $ loadSysInterface doc m phase
 
 {-
 *********************************************************
@@ -332,37 +334,37 @@ loadInterfaceForModule doc m
 -- | An 'IfM' function to load the home interface for a wired-in thing,
 -- so that we're sure that we see its instance declarations and rules
 -- See Note [Loading instances for wired-in things]
-loadWiredInHomeIface :: Name -> IfM lcl ()
-loadWiredInHomeIface name
+loadWiredInHomeIface :: Name -> ProgramLifecyclePhase -> IfM lcl ()
+loadWiredInHomeIface name phase
   = ASSERT( isWiredInName name )
-    do _ <- loadSysInterface doc (nameModule name); return ()
+    do _ <- loadSysInterface doc (nameModule name) phase; return ()
   where
     doc = text "Need home interface for wired-in thing" <+> ppr name
 
 ------------------
 -- | Loads a system interface and throws an exception if it fails
-loadSysInterface :: SDoc -> Module -> IfM lcl ModIface
+loadSysInterface :: SDoc -> Module -> ProgramLifecyclePhase -> IfM lcl ModIface
 loadSysInterface doc mod_name = loadInterfaceWithException doc mod_name ImportBySystem
 
 ------------------
 -- | Loads a user interface and throws an exception if it fails. The first parameter indicates
 -- whether we should import the boot variant of the module
-loadUserInterface :: Bool -> SDoc -> Module -> IfM lcl ModIface
+loadUserInterface :: Bool -> SDoc -> Module -> ProgramLifecyclePhase -> IfM lcl ModIface
 loadUserInterface is_boot doc mod_name
   = loadInterfaceWithException doc mod_name (ImportByUser is_boot)
 
 loadPluginInterface :: SDoc -> Module -> IfM lcl ModIface
 loadPluginInterface doc mod_name
-  = loadInterfaceWithException doc mod_name ImportByPlugin
+  = loadInterfaceWithException doc mod_name ImportByPlugin CompileTime
 
 ------------------
 -- | A wrapper for 'loadInterface' that throws an exception if it fails
-loadInterfaceWithException :: SDoc -> Module -> WhereFrom -> IfM lcl ModIface
-loadInterfaceWithException doc mod_name where_from
-  = withException (loadInterface doc mod_name where_from)
+loadInterfaceWithException :: SDoc -> Module -> WhereFrom -> ProgramLifecyclePhase -> IfM lcl ModIface
+loadInterfaceWithException doc mod_name where_from phase
+  = withException (loadInterface doc mod_name where_from phase)
 
 ------------------
-loadInterface :: SDoc -> Module -> WhereFrom
+loadInterface :: SDoc -> Module -> WhereFrom -> ProgramLifecyclePhase
               -> IfM lcl (MaybeErr MsgDoc ModIface)
 
 -- loadInterface looks in both the HPT and PIT for the required interface
@@ -377,15 +379,15 @@ loadInterface :: SDoc -> Module -> WhereFrom
 -- file -- perhaps the module has changed, and that interface
 -- is no longer used
 
-loadInterface doc_str mod from
+loadInterface doc_str mod from phase
   | isHoleModule mod
   -- Hole modules get special treatment
   = do dflags <- getDynFlags
        -- Redo search for our local hole module
-       loadInterface doc_str (mkModule (thisPackage dflags) (moduleName mod)) from
+       loadInterface doc_str (mkModule (thisPackage dflags) (moduleName mod)) from phase
   | otherwise
   = do  {       -- Read the state
-          (eps,hpt) <- getEpsAndHpt
+          (eps,hpt) <- getEpsAndHpt phase
         ; gbl_env <- getGblEnv
 
         ; traceIf (text "Considering whether to load" <+> ppr mod <+> ppr from)
@@ -556,9 +558,9 @@ computeInterface doc_str hi_boot_file mod0 = do
 -- signature itself; e.g. precise free module holes of
 -- @p[A=<A>,B=<B>]:B@ never includes B.
 moduleFreeHolesPrecise
-    :: SDoc -> Module
+    :: SDoc -> Module -> ProgramLifecyclePhase
     -> TcRnIf gbl lcl (MaybeErr MsgDoc (UniqDSet ModuleName))
-moduleFreeHolesPrecise doc_str mod
+moduleFreeHolesPrecise doc_str mod phase
  | moduleIsDefinite mod = return (Succeeded emptyUniqDSet)
  | otherwise =
    case splitModuleInsts mod of
@@ -566,7 +568,7 @@ moduleFreeHolesPrecise doc_str mod
         let insts = indefUnitIdInsts (indefModuleUnitId indef)
         traceIf (text "Considering whether to load" <+> ppr mod <+>
                  text "to compute precise free module holes")
-        (eps, hpt) <- getEpsAndHpt
+        (eps, hpt) <- getEpsAndHpt phase
         dflags <- getDynFlags
         case tryEpsAndHpt dflags eps hpt `firstJust` tryDepsCache eps imod insts of
             Just r -> return (Succeeded r)

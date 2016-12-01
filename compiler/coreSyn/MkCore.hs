@@ -245,9 +245,9 @@ mkWordExprWord :: DynFlags -> Word -> CoreExpr
 mkWordExprWord dflags w = mkCoreConApps wordDataCon [mkWordLitWord dflags w]
 
 -- | Create a 'CoreExpr' which will evaluate to the given @Integer@
-mkIntegerExpr  :: MonadThings m => Integer -> m CoreExpr  -- Result :: Integer
-mkIntegerExpr i = do t <- lookupTyCon integerTyConName
-                     return (Lit (mkLitInteger i (mkTyConTy t)))
+mkIntegerExpr  :: MonadThings m => Integer -> ProgramLifecyclePhase -> m CoreExpr  -- Result :: Integer
+mkIntegerExpr i phase = do t <- lookupTyCon integerTyConName phase
+                           return (Lit (mkLitInteger i (mkTyConTy t)))
 
 -- | Create a 'CoreExpr' which will evaluate to the given @Float@
 mkFloatExpr :: Float -> CoreExpr
@@ -263,23 +263,23 @@ mkCharExpr     :: Char             -> CoreExpr      -- Result = C# c :: Int
 mkCharExpr c = mkCoreConApps charDataCon [mkCharLit c]
 
 -- | Create a 'CoreExpr' which will evaluate to the given @String@
-mkStringExpr   :: MonadThings m => String     -> m CoreExpr  -- Result :: String
+mkStringExpr   :: MonadThings m => String     -> ProgramLifecyclePhase -> m CoreExpr  -- Result :: String
 
 -- | Create a 'CoreExpr' which will evaluate to a string morally equivalent to the given @FastString@
-mkStringExprFS :: MonadThings m => FastString -> m CoreExpr  -- Result :: String
+mkStringExprFS :: MonadThings m => FastString -> ProgramLifecyclePhase -> m CoreExpr  -- Result :: String
 
 mkStringExpr str = mkStringExprFS (mkFastString str)
 
-mkStringExprFS str
+mkStringExprFS str phase
   | nullFS str
   = return (mkNilExpr charTy)
 
   | all safeChar chars
-  = do unpack_id <- lookupId unpackCStringName
+  = do unpack_id <- lookupId unpackCStringName phase
        return (App (Var unpack_id) lit)
 
   | otherwise
-  = do unpack_utf8_id <- lookupId unpackCStringUtf8Name
+  = do unpack_utf8_id <- lookupId unpackCStringUtf8Name phase
        return (App (Var unpack_utf8_id) lit)
 
   where
@@ -570,9 +570,10 @@ mkFoldrExpr :: MonadThings m
             -> CoreExpr         -- ^ "Cons" function expression for the fold
             -> CoreExpr         -- ^ "Nil" expression for the fold
             -> CoreExpr         -- ^ List expression being folded acress
+            -> ProgramLifecyclePhase
             -> m CoreExpr
-mkFoldrExpr elt_ty result_ty c n list = do
-    foldr_id <- lookupId foldrName
+mkFoldrExpr elt_ty result_ty c n list phase = do
+    foldr_id <- lookupId foldrName phase
     return (Var foldr_id `App` Type elt_ty
            `App` Type result_ty
            `App` c
@@ -585,8 +586,9 @@ mkBuildExpr :: (MonadThings m, MonadUnique m)
             -> ((Id, Type) -> (Id, Type) -> m CoreExpr) -- ^ Function that, given information about the 'Id's
                                                         -- of the binders for the build worker function, returns
                                                         -- the body of that worker
+            -> ProgramLifecyclePhase                    -- ^ The phase we're compiling for
             -> m CoreExpr
-mkBuildExpr elt_ty mk_build_inside = do
+mkBuildExpr elt_ty mk_build_inside phase = do
     [n_tyvar] <- newTyVars [alphaTyVar]
     let n_ty = mkTyVarTy n_tyvar
         c_ty = mkFunTys [elt_ty, n_ty] n_ty
@@ -594,7 +596,7 @@ mkBuildExpr elt_ty mk_build_inside = do
 
     build_inside <- mk_build_inside (c, c_ty) (n, n_ty)
 
-    build_id <- lookupId buildName
+    build_id <- lookupId buildName phase
     return $ Var build_id `App` Type elt_ty `App` mkLams [n_tyvar, c, n] build_inside
   where
     newTyVars tyvar_tmpls = do
