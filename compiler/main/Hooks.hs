@@ -15,7 +15,7 @@ module Hooks ( Hooks
              , tcForeignImportsHook
              , tcForeignExportsHook
              , hscFrontendHook
-#ifdef GHCI
+#ifdef EXTINT
              , hscCompileCoreExprHook
 #endif
              , ghcPrimIfaceHook
@@ -23,7 +23,7 @@ module Hooks ( Hooks
              , runMetaHook
              , linkHook
              , runRnSpliceHook
-#ifdef GHCI
+#ifdef EXTINT
              , getValueSafelyHook
              , createIservProcessHook
 #endif
@@ -42,7 +42,7 @@ import TcRnTypes
 import Bag
 import RdrName
 import CoreSyn
-#ifdef GHCI
+#ifdef EXTINT
 import GHCi.RemoteTypes
 import SrcLoc
 import Type
@@ -70,7 +70,7 @@ emptyHooks = Hooks
   , tcForeignImportsHook   = Nothing
   , tcForeignExportsHook   = Nothing
   , hscFrontendHook        = Nothing
-#ifdef GHCI
+#ifdef EXTINT
   , hscCompileCoreExprHook = Nothing
 #endif
   , ghcPrimIfaceHook       = Nothing
@@ -78,7 +78,7 @@ emptyHooks = Hooks
   , runMetaHook            = Nothing
   , linkHook               = Nothing
   , runRnSpliceHook        = Nothing
-#ifdef GHCI
+#ifdef EXTINT
   , getValueSafelyHook     = Nothing
   , createIservProcessHook = Nothing
 #endif
@@ -89,7 +89,7 @@ data Hooks = Hooks
   , tcForeignImportsHook   :: Maybe ([LForeignDecl Name] -> TcM ([Id], [LForeignDecl Id], Bag GlobalRdrElt))
   , tcForeignExportsHook   :: Maybe ([LForeignDecl Name] -> TcM (LHsBinds TcId, [LForeignDecl TcId], Bag GlobalRdrElt))
   , hscFrontendHook        :: Maybe (ModSummary -> Hsc FrontendResult)
-#ifdef GHCI
+#ifdef EXTINT
   , hscCompileCoreExprHook :: Maybe (HscEnv -> SrcSpan -> CoreExpr -> IO ForeignHValue)
 #endif
   , ghcPrimIfaceHook       :: Maybe ModIface
@@ -97,7 +97,7 @@ data Hooks = Hooks
   , runMetaHook            :: Maybe (MetaHook TcM)
   , linkHook               :: Maybe (GhcLink -> DynFlags -> Bool -> HomePackageTable -> IO SuccessFlag)
   , runRnSpliceHook        :: Maybe (HsSplice Name -> RnM (HsSplice Name))
-#ifdef GHCI
+#ifdef EXTINT
   , getValueSafelyHook     :: Maybe (HscEnv -> Name -> Type -> IO (Maybe HValue))
   , createIservProcessHook :: Maybe (CreateProcess -> IO ProcessHandle)
 #endif

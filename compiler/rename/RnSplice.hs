@@ -5,7 +5,7 @@ module RnSplice (
         rnSpliceType, rnSpliceExpr, rnSplicePat, rnSpliceDecl,
         rnBracket,
         checkThLocalName
-#ifdef GHCI
+#ifdef EXTINT
         , traceSplice, SpliceInfo(..)
 #endif
   ) where
@@ -35,7 +35,7 @@ import {-# SOURCE #-} RnExpr   ( rnLExpr )
 import TcEnv            ( checkWellStaged )
 import THNames          ( liftName )
 
-#ifdef GHCI
+#ifdef EXTINT
 import DynFlags
 import FastString
 import ErrUtils         ( dumpIfSet_dyn_printer )
@@ -201,7 +201,7 @@ quotedNameStageErr br
   = sep [ text "Stage error: the non-top-level quoted name" <+> ppr br
         , text "must be used at the same stage at which is is bound" ]
 
-#ifndef GHCI
+#ifndef EXTINT
 rnTopSpliceDecls :: HsSplice RdrName -> RnM ([LHsDecl RdrName], FreeVars)
 rnTopSpliceDecls e = failTH e "Template Haskell top splice"
 

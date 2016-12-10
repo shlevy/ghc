@@ -10,7 +10,7 @@
 
 module TcAnnotations ( tcAnnotations, annCtxt ) where
 
-#ifdef GHCI
+#ifdef EXTINT
 import {-# SOURCE #-} TcSplice ( runAnnotation )
 import Module
 import DynFlags
@@ -26,7 +26,7 @@ import TcRnMonad
 import SrcLoc
 import Outputable
 
-#ifndef GHCI
+#ifndef EXTINT
 
 tcAnnotations :: [LAnnDecl Name] -> TcM [Annotation]
 -- No GHCI; emit a warning (not an error) and ignore. cf Trac #4268

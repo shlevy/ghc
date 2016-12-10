@@ -177,7 +177,7 @@ import Control.Monad
 import Data.Set ( Set )
 import qualified Data.Set as Set
 
-#ifdef GHCI
+#ifdef EXTINT
 import {-# SOURCE #-} TcSplice ( runRemoteModFinalizers )
 import qualified Data.Map as Map
 #endif
@@ -218,13 +218,13 @@ initTc hsc_env hsc_src keep_rn_syntax mod loc do_this
 
         dependent_files_var <- newIORef [] ;
         static_wc_var       <- newIORef emptyWC ;
-#ifdef GHCI
+#ifdef EXTINT
         th_topdecls_var      <- newIORef [] ;
         th_topnames_var      <- newIORef emptyNameSet ;
         th_modfinalizers_var <- newIORef [] ;
         th_state_var         <- newIORef Map.empty ;
         th_remote_state_var  <- newIORef Nothing ;
-#endif /* GHCI */
+#endif /* EXTINT */
         let {
              dflags = hsc_dflags hsc_env ;
 
@@ -234,13 +234,13 @@ initTc hsc_env hsc_src keep_rn_syntax mod loc do_this
                 | otherwise      = Nothing ;
 
              gbl_env = TcGblEnv {
-#ifdef GHCI
+#ifdef EXTINT
                 tcg_th_topdecls      = th_topdecls_var,
                 tcg_th_topnames      = th_topnames_var,
                 tcg_th_modfinalizers = th_modfinalizers_var,
                 tcg_th_state         = th_state_var,
                 tcg_th_remote_state  = th_remote_state_var,
-#endif /* GHCI */
+#endif /* EXTINT */
 
                 tcg_mod            = mod,
                 tcg_semantic_mod   =
@@ -1083,7 +1083,7 @@ failIfErrsM :: TcRn ()
 -- Useful to avoid error cascades
 failIfErrsM = ifErrsM failM (return ())
 
-#ifdef GHCI
+#ifdef EXTINT
 checkTH :: a -> String -> TcRn ()
 checkTH _ _ = return () -- OK
 #else
@@ -1610,7 +1610,7 @@ getStageAndBindLevel name
 setStage :: ThStage -> TcM a -> TcRn a
 setStage s = updLclEnv (\ env -> env { tcl_th_ctxt = s })
 
-#ifdef GHCI
+#ifdef EXTINT
 -- | Adds the given modFinalizers to the global environment and set them to use
 -- the current local environment.
 addModFinalizersWithLclEnv :: ThModFinalizers -> TcM ()

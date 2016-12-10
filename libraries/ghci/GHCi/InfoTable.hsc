@@ -6,9 +6,11 @@
 -- We use the RTS data structures directly via hsc2hs.
 --
 module GHCi.InfoTable
-  ( mkConInfoTable
-  , peekItbl, StgInfoTable(..)
+  ( peekItbl, StgInfoTable(..)
   , conInfoPtr
+#ifdef GHCI
+  , mkConInfoTable
+#endif
   ) where
 
 #if !defined(TABLES_NEXT_TO_CODE)
@@ -20,6 +22,7 @@ import GHC.Ptr
 import GHC.Exts
 import System.IO.Unsafe
 
+#ifdef GHCI
 mkConInfoTable
    :: Int     -- ptr words
    -> Int     -- non-ptr words
@@ -47,7 +50,7 @@ mkConInfoTable ptr_words nonptr_words tag ptrtag con_desc =
                          then Just code'
                          else Nothing
               }
-
+#endif
 
 -- -----------------------------------------------------------------------------
 -- Building machine code fragments for a constructor's entry code
@@ -283,6 +286,7 @@ byte7 w = fromIntegral (w `shiftR` 56)
 -- Get definitions for the structs, constants & config etc.
 #include "Rts.h"
 
+#ifdef GHCI
 -- entry point for direct returns for created constr itbls
 foreign import ccall "&stg_interp_constr1_entry" stg_interp_constr1_entry :: EntryFunPtr
 foreign import ccall "&stg_interp_constr2_entry" stg_interp_constr2_entry :: EntryFunPtr
@@ -301,7 +305,7 @@ interpConstrEntry = [ error "pointer tag 0"
                     , stg_interp_constr5_entry
                     , stg_interp_constr6_entry
                     , stg_interp_constr7_entry ]
-
+#endif
 -- Ultra-minimalist version specially for constructors
 #if SIZEOF_VOID_P == 8
 type HalfWord = Word32

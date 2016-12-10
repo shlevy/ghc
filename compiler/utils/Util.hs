@@ -179,6 +179,7 @@ branch of the conditional, thereby dropping debug code altogether when
 the flags are off.
 -}
 
+-- What do we want to do here when !defined(GHCI) && defined(EXTINT)?
 ghciSupported :: Bool
 #ifdef GHCI
 ghciSupported = True

@@ -17,16 +17,16 @@ TcSplice: Template Haskell splices
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module TcSplice(
-     -- These functions are defined in stage1 and stage2
-     -- The raise civilised errors in stage1
+     -- These functions are defined unconditionally and
+     -- raise civilised errors with no interpreter
      tcSpliceExpr, tcTypedBracket, tcUntypedBracket,
 --     runQuasiQuoteExpr, runQuasiQuotePat,
 --     runQuasiQuoteDecl, runQuasiQuoteType,
      runAnnotation,
 
-#ifdef GHCI
-     -- These ones are defined only in stage2, and are
-     -- called only in stage2 (ie GHCI is on)
+#ifdef EXTINT
+     -- These ones are defined and called only when there
+     -- is an interpreter.
      runMetaE, runMetaP, runMetaT, runMetaD, runQuasi,
      tcTopSpliceExpr, lookupThName_maybe,
      defaultRunMeta, runMeta', runRemoteModFinalizers,
@@ -51,7 +51,7 @@ import TcEnv
 
 import Control.Monad
 
-#ifdef GHCI
+#ifdef EXTINT
 import GHCi.Message
 import GHCi.RemoteTypes
 import GHCi
@@ -238,7 +238,7 @@ quotationCtxtDoc br_body
          2 (ppr br_body)
 
 
-#ifndef GHCI
+#ifndef EXTINT
 tcSpliceExpr  e _      = failTH e "Template Haskell splice"
 
 -- runQuasiQuoteExpr q = failTH q "quasiquote"
@@ -2011,4 +2011,4 @@ overloadedrecflds/should_fail/T11103.hs).  The "proper" fix requires changes to
 the TH AST to make it able to represent duplicate record fields.
 -}
 
-#endif  /* GHCI */
+#endif  /* EXTINT */

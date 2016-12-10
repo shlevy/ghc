@@ -25,6 +25,11 @@ Flag ghci
     Default: False
     Manual: True
 
+Flag extint
+    Description: Build client-side external interpreter support.
+    Default: False
+    Manual: True
+
 Flag stage1
     Description: Is this stage 1?
     Default: False
@@ -73,7 +78,7 @@ Library
             Build-Depends: terminfo == 0.4.*
         Build-Depends: unix   == 2.7.*
 
-    if flag(ghci)
+    if flag(extint)
         Build-Depends: ghci == @ProjectVersionMunged@
 
     GHC-Options: -Wall -fno-warn-name-shadowing
@@ -81,6 +86,9 @@ Library
     if flag(ghci)
         CPP-Options: -DGHCI
         Include-Dirs: ../rts/dist/build @FFIIncludeDir@
+
+    if flag(extint)
+        CPP-Options: -DEXTINT
 
     Other-Extensions:
         BangPatterns
@@ -612,7 +620,7 @@ Library
         reexported-modules:
             ghc-boot:GHC.Serialized as Serialized
 
-    if flag(ghci)
+    if flag(extint)
         Exposed-Modules:
             Convert
             ByteCodeTypes

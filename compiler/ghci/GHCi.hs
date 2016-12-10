@@ -46,7 +46,9 @@ module GHCi
   ) where
 
 import GHCi.Message
+#ifdef GHCI
 import GHCi.Run
+#endif
 import GHCi.RemoteTypes
 import GHCi.ResolvedBCO
 import GHCi.BreakArray (BreakArray)
@@ -159,9 +161,10 @@ iservCmd hsc_env@HscEnv{..} msg
      withIServ hsc_env $ \iserv ->
        uninterruptibleMask_ $ do -- Note [uninterruptibleMask_]
          iservCall iserv msg
+#ifdef GHCI
  | otherwise = -- Just run it directly
    run msg
-
+#endif
 
 -- Note [uninterruptibleMask_ and iservCmd]
 --
@@ -356,8 +359,10 @@ lookupSymbol hsc_env@HscEnv{..} str
                let p = fromRemotePtr r
                writeIORef iservLookupSymbolCache $! addToUFM cache str p
                return (Just p)
+#ifdef GHCI
  | otherwise =
    fmap fromRemotePtr <$> run (LookupSymbol (unpackFS str))
+#endif
 
 lookupClosure :: HscEnv -> String -> IO (Maybe HValueRef)
 lookupClosure hsc_env str =

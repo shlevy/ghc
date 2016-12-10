@@ -14,7 +14,7 @@ module HscTypes (
         Target(..), TargetId(..), pprTarget, pprTargetId,
         ModuleGraph, emptyMG,
         HscStatus(..),
-#ifdef GHCI
+#ifdef EXTINT
         IServ(..),
 #endif
 
@@ -137,7 +137,7 @@ module HscTypes (
 
 #include "HsVersions.h"
 
-#ifdef GHCI
+#ifdef EXTINT
 import ByteCodeTypes
 import InteractiveEvalTypes ( Resume )
 import GHCi.Message         ( Pipe )
@@ -202,7 +202,7 @@ import Data.IORef
 import Data.Time
 import Exception
 import System.FilePath
-#ifdef GHCI
+#ifdef EXTINT
 import Control.Concurrent
 import System.Process   ( ProcessHandle )
 #endif
@@ -403,7 +403,7 @@ data HscEnv
                 -- the 'IfGblEnv'. See 'TcRnTypes.tcg_type_env_var' for
                 -- 'TcRnTypes.TcGblEnv'.  See also Note [hsc_type_env_var hack]
 
-#ifdef GHCI
+#ifdef EXTINT
         , hsc_iserv :: MVar (Maybe IServ)
                 -- ^ interactive server process.  Created the first
                 -- time it is needed.
@@ -453,7 +453,7 @@ data HscEnv
 -- another day.
 
 
-#ifdef GHCI
+#ifdef EXTINT
 data IServ = IServ
   { iservPipe :: Pipe
   , iservProcess :: ProcessHandle
@@ -1490,7 +1490,7 @@ data InteractiveContext
          ic_default :: Maybe [Type],
              -- ^ The current default types, set by a 'default' declaration
 
-#ifdef GHCI
+#ifdef EXTINT
           ic_resume :: [Resume],
              -- ^ The stack of breakpoint contexts
 #endif
@@ -1531,7 +1531,7 @@ emptyInteractiveContext dflags
        ic_monad      = ioTyConName,  -- IO monad by default
        ic_int_print  = printName,    -- System.IO.print by default
        ic_default    = Nothing,
-#ifdef GHCI
+#ifdef EXTINT
        ic_resume     = [],
 #endif
        ic_cwd        = Nothing }
@@ -2950,7 +2950,7 @@ data Unlinked
    | DotDLL FilePath    -- ^ Dynamically linked library file (.so, .dll, .dylib)
    | BCOs CompiledByteCode    -- ^ A byte-code object, lives only in memory
 
-#ifndef GHCI
+#ifndef EXTINT
 data CompiledByteCode = CompiledByteCodeUndefined
 _unusedCompiledByteCode :: CompiledByteCode
 _unusedCompiledByteCode = CompiledByteCodeUndefined
@@ -2964,7 +2964,7 @@ instance Outputable Unlinked where
    ppr (DotO path)   = text "DotO" <+> text path
    ppr (DotA path)   = text "DotA" <+> text path
    ppr (DotDLL path) = text "DotDLL" <+> text path
-#ifdef GHCI
+#ifdef EXTINT
    ppr (BCOs bcos) = text "BCOs" <+> ppr bcos
 #else
    ppr (BCOs _)    = text "No byte code"

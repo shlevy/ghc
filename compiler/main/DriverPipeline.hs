@@ -2054,7 +2054,7 @@ doCpp dflags raw input_fn output_fn = do
 
     backend_defs <- getBackendDefs dflags
 
-#ifdef GHCI
+#ifdef EXTINT
     let th_defs = [ "-D__GLASGOW_HASKELL_TH__" ]
 #else
     let th_defs = [ "-D__GLASGOW_HASKELL_TH__=0" ]

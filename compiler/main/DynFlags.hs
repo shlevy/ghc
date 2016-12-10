@@ -124,7 +124,7 @@ module DynFlags (
         -- * Compiler configuration suitable for display to the user
         compilerInfo,
 
-#ifdef GHCI
+#ifdef EXTINT
         rtsIsProfiled,
 #endif
         dynamicGhc,
@@ -1943,6 +1943,9 @@ dopt_unset dfs f = dfs{ dumpFlags = IntSet.delete (fromEnum f) (dumpFlags dfs) }
 
 -- | Test whether a 'GeneralFlag' is set
 gopt :: GeneralFlag -> DynFlags -> Bool
+#if defined(EXTINT) && !defined(GHCI)
+gopt Opt_ExternalInterpreter _ = True
+#endif
 gopt f dflags  = fromEnum f `IntSet.member` generalFlags dflags
 
 -- | Set a 'GeneralFlag'
@@ -3701,7 +3704,7 @@ supportedExtensions :: [String]
 supportedExtensions = concatMap toFlagSpecNamePair xFlags
   where
     toFlagSpecNamePair flg
-#ifndef GHCI
+#ifndef EXTINT
       -- make sure that `ghc --supported-extensions` omits
       -- "TemplateHaskell" when it's known to be unsupported. See also
       -- GHC #11102 for rationale
@@ -4287,7 +4290,7 @@ setIncoherentInsts True = do
   upd (\d -> d { incoherentOnLoc = l })
 
 checkTemplateHaskellOk :: TurnOnFlag -> DynP ()
-#ifdef GHCI
+#ifdef EXTINT
 checkTemplateHaskellOk _turn_on
   = getCurLoc >>= \l -> upd (\d -> d { thOnLoc = l })
 #else

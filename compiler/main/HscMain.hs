@@ -59,7 +59,7 @@ module HscMain
     , hscParseIdentifier
     , hscTcRcLookupName
     , hscTcRnGetInfo
-#ifdef GHCI
+#ifdef EXTINT
     , hscIsGHCiMonad
     , hscGetModuleInterface
     , hscRnImportDecls
@@ -83,7 +83,7 @@ module HscMain
     , showModuleIndex
     ) where
 
-#ifdef GHCI
+#ifdef EXTINT
 import Id
 import GHCi.RemoteTypes ( ForeignHValue )
 import ByteCodeGen      ( byteCodeGen, coreExprToBCOs )
@@ -178,7 +178,7 @@ newHscEnv dflags = do
     us      <- mkSplitUniqSupply 'r'
     nc_var  <- newIORef (initNameCache us knownKeyNames)
     fc_var  <- newIORef emptyInstalledModuleEnv
-#ifdef GHCI
+#ifdef EXTINT
     iserv_mvar <- newMVar Nothing
 #endif
     return HscEnv {  hsc_dflags       = dflags
@@ -190,7 +190,7 @@ newHscEnv dflags = do
                   ,  hsc_NC           = nc_var
                   ,  hsc_FC           = fc_var
                   ,  hsc_type_env_var = Nothing
-#ifdef GHCI
+#ifdef EXTINT
                   , hsc_iserv        = iserv_mvar
 #endif
                   }
@@ -262,7 +262,7 @@ ioMsgMaybe' ioA = do
 -- -----------------------------------------------------------------------------
 -- | Lookup things in the compiler's environment
 
-#ifdef GHCI
+#ifdef EXTINT
 hscTcRnLookupRdrName :: HscEnv -> Located RdrName -> IO [Name]
 hscTcRnLookupRdrName hsc_env0 rdr_name
   = runInteractiveHsc hsc_env0 $
@@ -284,7 +284,7 @@ hscTcRnGetInfo hsc_env0 name
     do { hsc_env <- getHscEnv
        ; ioMsgMaybe' $ tcRnGetInfo hsc_env name }
 
-#ifdef GHCI
+#ifdef EXTINT
 hscIsGHCiMonad :: HscEnv -> String -> IO Name
 hscIsGHCiMonad hsc_env name
   = runHsc hsc_env $ ioMsgMaybe $ isGHCiMonad hsc_env name
@@ -1073,7 +1073,7 @@ hscCheckSafe' dflags m l = do
         let pkgIfaceT = eps_PIT hsc_eps
             homePkgT  = hsc_HPT hsc_env
             iface     = lookupIfaceByModule dflags homePkgT pkgIfaceT m
-#ifdef GHCI
+#ifdef EXTINT
         -- the 'lookupIfaceByModule' method will always fail when calling from GHCi
         -- as the compiler hasn't filled in the various module tables
         -- so we need to call 'getModuleInterface' to load from disk
@@ -1320,7 +1320,7 @@ hscInteractive :: HscEnv
                -> CgGuts
                -> ModSummary
                -> IO (Maybe FilePath, CompiledByteCode)
-#ifdef GHCI
+#ifdef EXTINT
 hscInteractive hsc_env cgguts mod_summary = do
     let dflags = hsc_dflags hsc_env
     let CgGuts{ -- This is the last use of the ModGuts in a compilation.
@@ -1469,7 +1469,7 @@ A naked expression returns a singleton Name [it]. The stmt is lifted into the
 IO monad as explained in Note [Interactively-bound Ids in GHCi] in HscTypes
 -}
 
-#ifdef GHCI
+#ifdef EXTINT
 -- | Compile a stmt all the way to an HValue, but don't run it
 --
 -- We return Nothing to indicate an empty statement (or comment only), not a
@@ -1710,7 +1710,7 @@ hscParseThingWithLocation source linenumber parser str
 %*                                                                      *
 %********************************************************************* -}
 
-#ifdef GHCI
+#ifdef EXTINT
 hscCompileCoreExpr :: HscEnv -> SrcSpan -> CoreExpr -> IO ForeignHValue
 hscCompileCoreExpr hsc_env =
   lookupHook hscCompileCoreExprHook hscCompileCoreExpr' (hsc_dflags hsc_env) hsc_env

@@ -7,7 +7,7 @@
 
 module Coverage (addTicksToBinds, hpcInitCode) where
 
-#ifdef GHCI
+#ifdef EXTINT
 import qualified GHCi
 import GHCi.RemoteTypes
 import Data.Array
@@ -129,7 +129,7 @@ guessSourceFile binds orig_file =
 
 
 mkModBreaks :: HscEnv -> Module -> Int -> [MixEntry_] -> IO ModBreaks
-#ifndef GHCI
+#ifndef EXTINT
 mkModBreaks _hsc_env _mod _count _entries = return emptyModBreaks
 #else
 mkModBreaks hsc_env mod count entries

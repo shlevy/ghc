@@ -14,7 +14,7 @@ ToDo [Oct 2013]
 
 module SpecConstr(
         specConstrProgram
-#ifdef GHCI
+#ifdef EXTINT
         , SpecConstrAnnotation(..)
 #endif
     ) where
@@ -61,7 +61,7 @@ import PrelNames        ( specTyConName )
 import Module
 
 -- See Note [Forcing specialisation]
-#ifndef GHCI
+#ifndef EXTINT
 type SpecConstrAnnotation = ()
 #else
 import TyCon ( TyCon )
@@ -954,10 +954,10 @@ ignoreType    :: ScEnv -> Type   -> Bool
 ignoreDataCon  :: ScEnv -> DataCon -> Bool
 forceSpecBndr :: ScEnv -> Var    -> Bool
 
-#ifndef GHCI
+#ifndef EXTINT
 ignoreType    _ _  = False
 ignoreDataCon  _ _ = False
-#else /* GHCI */
+#else /* EXTINT */
 
 ignoreDataCon env dc = ignoreTyCon env (dataConTyCon dc)
 
@@ -969,7 +969,7 @@ ignoreType env ty
 ignoreTyCon :: ScEnv -> TyCon -> Bool
 ignoreTyCon env tycon
   = lookupUFM (sc_annotations env) tycon == Just NoSpecConstr
-#endif /* GHCI */
+#endif /* EXTINT */
 
 forceSpecBndr env var = forceSpecFunTy env . snd . splitForAllTys . varType $ var
 
@@ -984,7 +984,7 @@ forceSpecArgTy env ty
   | Just (tycon, tys) <- splitTyConApp_maybe ty
   , tycon /= funTyCon
       = tyConName tycon == specTyConName
-#ifdef GHCI
+#ifdef EXTINT
         || lookupUFM (sc_annotations env) tycon == Just ForceSpecConstr
 #endif
         || any (forceSpecArgTy env) tys

@@ -24,6 +24,11 @@ Flag ghci
     Default: False
     Manual: True
 
+Flag extint
+    Description: Build client-side external interpreter support.
+    Default: False
+    Manual: True
+
 Executable ghc
     Default-Language: Haskell2010
 
@@ -73,6 +78,9 @@ Executable ghc
             ScopedTypeVariables
             UnboxedTuples
             ViewPatterns
+
+    if flag(extint)
+        CPP-Options: -DEXTINT
 
     Other-Extensions:
         CPP

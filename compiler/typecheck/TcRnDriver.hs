@@ -14,7 +14,7 @@ https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/TypeChecker
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module TcRnDriver (
-#ifdef GHCI
+#ifdef EXTINT
         tcRnStmt, tcRnExpr, TcRnExprMode(..), tcRnType,
         tcRnImportDecls,
         tcRnLookupRdrName,
@@ -43,6 +43,11 @@ module TcRnDriver (
     ) where
 
 #ifdef GHCI
+import DynamicLoading ( loadPlugins )
+import Plugins ( tcPlugin )
+#endif
+
+#ifdef EXTINT
 import {-# SOURCE #-} TcSplice ( finishTH )
 import RnSplice ( rnTopSpliceDecls, traceSplice, SpliceInfo(..) )
 import IfaceEnv( externaliseName )
@@ -54,8 +59,6 @@ import RnExpr
 import MkId
 import TidyPgm    ( globaliseAndTidyId )
 import TysWiredIn ( unitTy, mkListTy )
-import DynamicLoading ( loadPlugins )
-import Plugins ( tcPlugin )
 #endif
 
 import DynFlags
@@ -392,14 +395,14 @@ tcRnSrcDecls explicit_mod_hdr decls
       ; new_ev_binds <- {-# SCC "simplifyTop" #-}
                         simplifyTop lie
 
-#ifdef GHCI
+#ifdef EXTINT
         -- Finalizers must run after constraints are simplified, or some types
         -- might not be complete when using reify (see #12777).
       ; (tcg_env, tcl_env) <- run_th_modfinalizers
       ; setEnvs (tcg_env, tcl_env) $ do {
 
       ; finishTH
-#endif /* GHCI */
+#endif /* EXTINT */
 
       ; traceTc "Tc9" empty
 
@@ -436,12 +439,12 @@ tcRnSrcDecls explicit_mod_hdr decls
 
       ; setGlobalTypeEnv tcg_env' final_type_env
 
-#ifdef GHCI
+#ifdef EXTINT
    }
-#endif /* GHCI */
+#endif /* EXTINT */
    } }
 
-#ifdef GHCI
+#ifdef EXTINT
 -- | Runs TH finalizers and renames and typechecks the top-level declarations
 -- that they could introduce.
 run_th_modfinalizers :: TcM (TcGblEnv, TcLclEnv)
@@ -467,7 +470,7 @@ run_th_modfinalizers = do
         )
         -- addTopDecls can add declarations which add new finalizers.
         run_th_modfinalizers
-#endif /* GHCI */
+#endif /* EXTINT */
 
 tc_rn_src_decls :: [LHsDecl RdrName]
                 -> TcM (TcGblEnv, TcLclEnv)
@@ -482,7 +485,7 @@ tc_rn_src_decls ds
       ; (tcg_env, rn_decls) <- rnTopSrcDecls first_group
                 -- rnTopSrcDecls fails if there are any errors
 
-#ifdef GHCI
+#ifdef EXTINT
         -- Get TH-generated top-level declarations and make sure they don't
         -- contain any splices since we don't handle that at the moment
         --
@@ -515,7 +518,7 @@ tc_rn_src_decls ds
 
                     ; return (tcg_env, appendGroups rn_decls th_rn_decls)
                     }
-#endif /* GHCI */
+#endif /* EXTINT */
 
       -- Type check all declarations
       ; (tcg_env, tcl_env) <- setGblEnv tcg_env $
@@ -526,7 +529,7 @@ tc_rn_src_decls ds
         case group_tail of
           { Nothing -> return (tcg_env, tcl_env)
 
-#ifndef GHCI
+#ifndef EXTINT
             -- There shouldn't be a splice
           ; Just (SpliceDecl {}, _) ->
             failWithTc (text "Can't do a top-level splice; need a bootstrapped compiler")
@@ -545,7 +548,7 @@ tc_rn_src_decls ds
                  tc_rn_src_decls (spliced_decls ++ rest_ds)
                }
           }
-#endif /* GHCI */
+#endif /* EXTINT */
       }
 
 {-
@@ -1758,7 +1761,7 @@ lead to duplicate "perhaps you meant..." suggestions (e.g. T5564).
 We don't bother with the tcl_th_bndrs environment either.
 -}
 
-#ifdef GHCI
+#ifdef EXTINT
 -- | The returned [Id] is the list of new Ids bound by this statement. It can
 -- be used to extend the InteractiveContext via extendInteractiveContext.
 --
@@ -2270,7 +2273,7 @@ externaliseAndTidyId this_mod id
 ************************************************************************
 -}
 
-#ifdef GHCI
+#ifdef EXTINT
 -- | ASSUMES that the module is either in the 'HomePackageTable' or is
 -- a package module with an interface on disk.  If neither of these is
 -- true, then the result will be an error indicating the interface

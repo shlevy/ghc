@@ -9,14 +9,14 @@
 -- -----------------------------------------------------------------------------
 
 module InteractiveEvalTypes (
-#ifdef GHCI
+#ifdef EXTINT
         Resume(..), History(..), ExecResult(..),
         SingleStep(..), isStep, ExecOptions(..),
         BreakInfo(..)
 #endif
         ) where
 
-#ifdef GHCI
+#ifdef EXTINT
 
 import GHCi.RemoteTypes
 import GHCi.Message (EvalExpr, ResumeContext)

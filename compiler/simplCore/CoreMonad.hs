@@ -49,13 +49,13 @@ module CoreMonad (
     debugTraceMsg, debugTraceMsgS,
     dumpIfSet_dyn,
 
-#ifdef GHCI
+#ifdef EXTINT
     -- * Getting 'Name's
     thNameToGhcName
 #endif
   ) where
 
-#ifdef GHCI
+#ifdef EXTINT
 import Name( Name )
 import TcRnMonad        ( initTcForLookup )
 #endif
@@ -94,7 +94,7 @@ import Control.Applicative ( Alternative(..) )
 
 import Prelude hiding   ( read )
 
-#ifdef GHCI
+#ifdef EXTINT
 import Control.Concurrent.MVar (MVar)
 import Linker ( PersistentLinkerState, saveLinkerGlobals, restoreLinkerGlobals )
 import {-# SOURCE #-} TcSplice ( lookupThName_maybe )
@@ -510,7 +510,7 @@ data CoreReader = CoreReader {
         cr_loc                 :: SrcSpan,   -- Use this for log/error messages so they
                                              -- are at least tagged with the right source file
         cr_visible_orphan_mods :: !ModuleSet,
-#ifdef GHCI
+#ifdef EXTINT
         cr_globals :: (MVar PersistentLinkerState, Bool)
 #else
         cr_globals :: ()
@@ -877,7 +877,7 @@ instance MonadThings CoreM where
 ************************************************************************
 -}
 
-#ifdef GHCI
+#ifdef EXTINT
 -- | Attempt to convert a Template Haskell name to one that GHC can
 -- understand. Original TH names such as those you get when you use
 -- the @'foo@ syntax will be translated to their equivalent GHC name

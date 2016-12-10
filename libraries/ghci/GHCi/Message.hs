@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, DeriveGeneric, StandaloneDeriving,
+{-# LANGUAGE GADTs, DeriveGeneric, StandaloneDeriving, ScopedTypeVariables,
     GeneralizedNewtypeDeriving, ExistentialQuantification, RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing -fno-warn-orphans #-}
 
@@ -19,6 +19,7 @@ module GHCi.Message
   , QState(..)
   , getMessage, putMessage, getTHMessage, putTHMessage
   , Pipe(..), remoteCall, remoteTHCall, readPipe, writePipe
+  , toSerializableException, fromSerializableException
   ) where
 
 import GHCi.RemoteTypes
@@ -517,3 +518,14 @@ getBin h get leftover = go leftover (runGetIncremental get)
         else go Nothing (fun (Just b))
    go _lft (Fail _rest _off str) =
      throwIO (ErrorCall ("getBin: " ++ str))
+
+toSerializableException :: SomeException -> SerializableException
+toSerializableException ex
+  | Just UserInterrupt <- fromException ex  = EUserInterrupt
+  | Just (ec::ExitCode) <- fromException ex = (EExitCode ec)
+  | otherwise = EOtherException (show (ex :: SomeException))
+
+fromSerializableException :: SerializableException -> SomeException
+fromSerializableException EUserInterrupt = toException UserInterrupt
+fromSerializableException (EExitCode c) = toException c
+fromSerializableException (EOtherException str) = toException (ErrorCall str)
