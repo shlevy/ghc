@@ -49,16 +49,12 @@ module CoreMonad (
     debugTraceMsg, debugTraceMsgS,
     dumpIfSet_dyn,
 
-#ifdef GHCI
     -- * Getting 'Name's
     thNameToGhcName
-#endif
   ) where
 
-#ifdef GHCI
 import Name( Name )
 import TcRnMonad        ( initTcForLookup )
-#endif
 import CoreSyn
 import HscTypes
 import Module
@@ -94,18 +90,10 @@ import Control.Applicative ( Alternative(..) )
 
 import Prelude hiding   ( read )
 
-#ifdef GHCI
 import Control.Concurrent.MVar (MVar)
 import Linker ( PersistentLinkerState, saveLinkerGlobals, restoreLinkerGlobals )
 import {-# SOURCE #-} TcSplice ( lookupThName_maybe )
 import qualified Language.Haskell.TH as TH
-#else
-saveLinkerGlobals :: IO ()
-saveLinkerGlobals = return ()
-
-restoreLinkerGlobals :: () -> IO ()
-restoreLinkerGlobals () = return ()
-#endif
 
 {-
 ************************************************************************
@@ -510,11 +498,7 @@ data CoreReader = CoreReader {
         cr_loc                 :: SrcSpan,   -- Use this for log/error messages so they
                                              -- are at least tagged with the right source file
         cr_visible_orphan_mods :: !ModuleSet,
-#ifdef GHCI
         cr_globals :: (MVar PersistentLinkerState, Bool)
-#else
-        cr_globals :: ()
-#endif
 }
 
 -- Note: CoreWriter used to be defined with data, rather than newtype.  If it
@@ -877,7 +861,6 @@ instance MonadThings CoreM where
 ************************************************************************
 -}
 
-#ifdef GHCI
 -- | Attempt to convert a Template Haskell name to one that GHC can
 -- understand. Original TH names such as those you get when you use
 -- the @'foo@ syntax will be translated to their equivalent GHC name
@@ -888,4 +871,3 @@ thNameToGhcName :: TH.Name -> CoreM (Maybe Name)
 thNameToGhcName th_name = do
     hsc_env <- getHscEnv
     liftIO $ initTcForLookup hsc_env (lookupThName_maybe th_name)
-#endif

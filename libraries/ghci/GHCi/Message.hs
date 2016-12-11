@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, DeriveGeneric, StandaloneDeriving,
+{-# LANGUAGE GADTs, DeriveGeneric, StandaloneDeriving, ScopedTypeVariables,
     GeneralizedNewtypeDeriving, ExistentialQuantification, RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing -fno-warn-orphans #-}
 
@@ -13,7 +13,7 @@ module GHCi.Message
   , THMessage(..), THMsg(..)
   , QResult(..)
   , EvalStatus_(..), EvalStatus, EvalResult(..), EvalOpts(..), EvalExpr(..)
-  , SerializableException(..)
+  , SerializableException(..), toSerializableException, fromSerializableException
   , THResult(..), THResultType(..)
   , ResumeContext(..)
   , QState(..)
@@ -351,6 +351,17 @@ data SerializableException
   | EExitCode ExitCode
   | EOtherException String
   deriving (Generic, Show)
+
+toSerializableException :: SomeException -> SerializableException
+toSerializableException ex
+  | Just UserInterrupt <- fromException ex  = EUserInterrupt
+  | Just (ec::ExitCode) <- fromException ex = (EExitCode ec)
+  | otherwise = EOtherException (show (ex :: SomeException))
+
+fromSerializableException :: SerializableException -> SomeException
+fromSerializableException EUserInterrupt = toException UserInterrupt
+fromSerializableException (EExitCode c) = toException c
+fromSerializableException (EOtherException str) = toException (ErrorCall str)
 
 instance Binary ExitCode
 instance Binary SerializableException
