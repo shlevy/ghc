@@ -78,6 +78,12 @@ import GHC.IO.Handle.Types (Handle)
 #ifdef mingw32_HOST_OS
 import Foreign.C
 import GHC.IO.Handle.FD (fdToHandle)
+#if !MIN_VERSION_process(1,4,2)
+import System.Posix.Internals
+import Foreign.Marshal.Array
+import Foreign.C.Error
+import Foreign.Storable
+#endif
 #else
 import System.Posix as Posix
 #endif
@@ -512,6 +518,23 @@ runWithPipes createProc prog opts = do
     return (ph, rh, wh)
       where mkHandle :: CInt -> IO Handle
             mkHandle fd = (fdToHandle fd) `onException` (c__close fd)
+
+#if !MIN_VERSION_process(1,4,2)
+-- This #include and the _O_BINARY below are the only reason this is hsc,
+-- so we can remove that once we can depend on process 1.4.2
+#include <fcntl.h>
+
+createPipeFd :: IO (FD, FD)
+createPipeFd = do
+    allocaArray 2 $ \ pfds -> do
+        throwErrnoIfMinus1_ "_pipe" $ c__pipe pfds 2 (#const _O_BINARY)
+        readfd <- peek pfds
+        writefd <- peekElemOff pfds 1
+        return (readfd, writefd)
+
+foreign import ccall "io.h _pipe" c__pipe ::
+    Ptr CInt -> CUInt -> CInt -> IO CInt
+#endif
 #else
 runWithPipes createProc prog opts = do
     (rfd1, wfd1) <- Posix.createPipe -- we read on rfd1
