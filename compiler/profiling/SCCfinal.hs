@@ -108,7 +108,7 @@ stgMassageForProfiling dflags mod_name _us stg_binds
         -- Top level CAF without a cost centre attached
         -- Attach CAF cc (collect if individual CAF ccs)
         caf_ccs <- if gopt Opt_AutoSccsOnIndividualCafs dflags
-                   then let cc = mkAutoCC binder modl CafCC
+                   then let cc = mkAutoCC binder modl
                             ccs = mkSingletonCCS cc
                                    -- careful: the binder might be :Main.main,
                                    -- which doesn't belong to module mod_name.
