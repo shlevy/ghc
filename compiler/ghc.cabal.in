@@ -376,6 +376,7 @@ Library
         TysPrim
         TysWiredIn
         CostCentre
+        CostCentreState
         ProfInit
         SCCfinal
         RnBinds

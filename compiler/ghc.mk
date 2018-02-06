@@ -461,6 +461,7 @@ compiler_stage2_dll0_MODULES = \
 	CoreSeq \
 	CoreStats \
 	CostCentre \
+	CostCentreState \
 	DataCon \
 	Demand \
 	Digraph \

@@ -176,6 +176,7 @@ import FastString
 import qualified GHC.LanguageExtensions as LangExt
 import Fingerprint
 import Util
+import CostCentreState
 
 import Control.Monad (ap, liftM, msum)
 #if __GLASGOW_HASKELL__ > 710
@@ -382,6 +383,8 @@ data DsGblEnv
         , ds_parr_bi :: PArrBuiltin             -- desugarar names for '-XParallelArrays'
         , ds_complete_matches :: CompleteMatchMap
            -- Additional complete pattern matches
+        , ds_cc_st   :: IORef CostCentreState
+           -- Tracking indices for cost centre annotations
         }
 
 instance ContainsModule DsGblEnv where
@@ -666,7 +669,10 @@ data TcGblEnv
         tcg_static_wc :: TcRef WantedConstraints,
           -- ^ Wanted constraints of static forms.
         -- See Note [Constraints in static forms].
-        tcg_complete_matches :: [CompleteMatch]
+        tcg_complete_matches :: [CompleteMatch],
+
+        -- ^ Tracking indices for cost centre annotations
+        tcg_cc_st   :: TcRef CostCentreState
     }
 
 -- NB: topModIdentity, not topModSemantic!
